@@ -1,0 +1,92 @@
+# webhook-receiver.yaml - Simple HTTP server to receive and log alerts
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook-receiver
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webhook-receiver
+  template:
+    metadata:
+      labels:
+        app: webhook-receiver
+    spec:
+      containers:
+      - name: webhook-receiver
+        image: python:3.9-slim
+        command: ["/bin/bash"]
+        args:
+        - -c
+        - |
+          cat > /tmp/webhook_server.py << 'EOF'
+          from http.server import HTTPServer, BaseHTTPRequestHandler
+          import json
+          import datetime
+          
+          class WebhookHandler(BaseHTTPRequestHandler):
+              def do_POST(self):
+                  content_length = int(self.headers['Content-Length'])
+                  post_data = self.rfile.read(content_length)
+                  
+                  try:
+                      webhook_data = json.loads(post_data.decode('utf-8'))
+                      timestamp = datetime.datetime.now().isoformat()
+                      
+                      print(f"\n{'='*50}")
+                      print(f"WEBHOOK RECEIVED: {timestamp}")
+                      print(f"{'='*50}")
+                      
+                      if 'alerts' in webhook_data:
+                          for alert in webhook_data['alerts']:
+                              status = alert.get('status', 'unknown')
+                              alert_name = alert.get('labels', {}).get('alertname', 'unknown')
+                              instance = alert.get('labels', {}).get('instance', 'unknown')
+                              
+                              print(f"Alert: {alert_name}")
+                              print(f"Status: {status}")
+                              print(f"Instance: {instance}")
+                              print(f"Labels: {alert.get('labels', {})}")
+                              print(f"Annotations: {alert.get('annotations', {})}")
+                              
+                              if status == 'firing':
+                                  print("🔥 ALERT FIRING - Would create ticket here")
+                              elif status == 'resolved':
+                                  print("✅ ALERT RESOLVED - Would close ticket here")
+                              print("-" * 30)
+                      
+                      self.send_response(200)
+                      self.send_header('Content-type', 'application/json')
+                      self.end_headers()
+                      self.wfile.write(b'{"status": "ok"}')
+                      
+                  except Exception as e:
+                      print(f"Error processing webhook: {e}")
+                      self.send_response(500)
+                      self.end_headers()
+          
+          if __name__ == '__main__':
+              server = HTTPServer(('0.0.0.0', 8080), WebhookHandler)
+              print("Webhook receiver started on port 8080")
+              print("Waiting for alerts...")
+              server.serve_forever()
+          EOF
+          
+          python /tmp/webhook_server.py
+        ports:
+        - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook-receiver-service
+  namespace: monitoring
+spec:
+  selector:
+    app: webhook-receiver
+  ports:
+  - port: 8080
+    targetPort: 8080
+  type: ClusterIP

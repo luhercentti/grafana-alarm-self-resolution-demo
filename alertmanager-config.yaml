@@ -1,0 +1,62 @@
+# alertmanager-config.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-prometheus-stack-alertmanager
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alertmanager
+type: Opaque
+stringData:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+      
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 10s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: 'webhook-receiver'
+      routes:
+      - match:
+          service: test-app
+        receiver: 'test-webhook'
+        group_by: ['alertname', 'instance']
+        repeat_interval: 2m  # Faster repeat for testing
+        
+    receivers:
+    - name: 'webhook-receiver'
+      webhook_configs:
+      - url: 'http://webhook-receiver-service.monitoring.svc.cluster.local:8080/webhook'
+        send_resolved: true
+        title: 'Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          Status: {{ .Status }}
+          {{ range .Alerts }}
+          Alert: {{ .Labels.alertname }}
+          Instance: {{ .Labels.instance }}
+          Description: {{ .Annotations.description }}
+          {{ end }}
+        
+    - name: 'test-webhook'
+      webhook_configs:
+      - url: 'http://webhook-receiver-service.monitoring.svc.cluster.local:8080/webhook'
+        send_resolved: true  # ← This ensures resolution notifications are sent
+        title: 'Test App Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          🚨 Status: {{ .Status }}
+          {{ range .Alerts }}
+          Alert: {{ .Labels.alertname }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Summary: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          {{ end }}
+        
+    inhibit_rules:
+    - source_match:
+        severity: 'critical'
+      target_match:
+        severity: 'warning'
+      equal: ['alertname', 'cluster', 'service']

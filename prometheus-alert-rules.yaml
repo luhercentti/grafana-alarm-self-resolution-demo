@@ -1,0 +1,35 @@
+# prometheus-alert-rules.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: test-app-alerts
+  namespace: default
+  labels:
+    prometheus: prometheus-stack-prometheus
+    role: alert-rules
+    release: prometheus-stack
+spec:
+  groups:
+  - name: test-app-alerts
+    rules:
+    - alert: TestAppDown
+      expr: up{job="test-app-service"} == 0
+      for: 30s
+      labels:
+        severity: critical
+        service: test-app
+        team: platform
+      annotations:
+        summary: "Test application is down"
+        description: "Test application {{ $labels.instance }} has been down for more than 30 seconds"
+        
+    - alert: TestAppRecovered
+      expr: up{job="test-app-service"} == 1
+      for: 30s
+      labels:
+        severity: info
+        service: test-app
+        team: platform
+      annotations:
+        summary: "Test application has recovered"
+        description: "Test application {{ $labels.instance }} is back online"
