@@ -28,8 +28,21 @@ This entire lab runs locally on **minikube**, simulating your EKS environment:
 ## Key Components
 
 ### 1. Alert Rules (`prometheus-alert-rules.yaml`)
-- **TestAppDown**: Fires when service is unavailable (`up{job="test-app-service"} == 0`)
-- **TestAppRecovered**: Fires when service recovers (`up{job="test-app-service"} == 1`)
+- **TestAppDown**: Fires when service is unavailable (`up{job="test-app-service"} == 0`) and automatically resolves when service recovers (`up{job="test-app-service"} == 1`)
+
+### ⚠️ **Important: Self-Resolution Pattern**
+This lab uses the **correct pattern** for alert self-resolution:
+
+✅ **CORRECT**: Single alert that fires and resolves naturally
+- `TestAppDown` fires when `up == 0`
+- `TestAppDown` resolves when `up == 1`
+- Alertmanager sends both "firing" and "resolved" webhooks
+
+❌ **INCORRECT**: Separate alerts for problems and recovery
+- ~~`TestAppDown` fires when `up == 0`~~
+- ~~`TestAppRecovered` fires when `up == 1` (stays firing forever!)~~
+
+**Why the incorrect pattern fails**: Recovery alerts stay in firing state permanently when the service is healthy, creating noise and preventing proper self-resolution.
 
 ### 2. Alertmanager Configuration (`alertmanager-config.yaml`)
 **Critical setting for self-resolution:**
@@ -201,8 +214,9 @@ Instead of custom webhooks, use JSM's built-in automation:
    - Verify `send_resolved: true` is set
 
 3. **Resolution not working**:
-   - Ensure resolution alert rule exists (TestAppRecovered)
+   - Ensure `send_resolved: true` is set in Alertmanager configuration
    - Check alert routing in Alertmanager config
+   - Verify the alert condition can naturally resolve (e.g., `up == 0` resolves when `up == 1`)
 
 ### Debug Commands:
 ```bash
@@ -230,7 +244,7 @@ curl -X POST -H "Content-Type: application/json" \
 ### Configuration Files:
 - `alertmanager-config.yaml` - Basic webhook configuration
 - `alertmanager-config-enhanced.yaml` - Production-ready configuration
-- `prometheus-alert-rules.yaml` - Alert definitions
+- `prometheus-alert-rules.yaml` - **Corrected** alert definitions with examples and documentation
 - `webhook-receiver.yaml` - Mock webhook endpoint for testing
 - `test-app.yaml` - Test application to trigger alerts
 

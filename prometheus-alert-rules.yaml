@@ -1,4 +1,4 @@
-# prometheus-alert-rules.yaml
+# prometheus-alert-rules-fixed.yaml - Corrected version for proper self-resolution
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -12,6 +12,7 @@ spec:
   groups:
   - name: test-app-alerts
     rules:
+    # CORRECT: Only one alert that fires when down and resolves when up
     - alert: TestAppDown
       expr: up{job="test-app-service"} == 0
       for: 30s
@@ -22,14 +23,22 @@ spec:
       annotations:
         summary: "Test application is down"
         description: "Test application {{ $labels.instance }} has been down for more than 30 seconds"
+        runbook_url: "https://your-runbook.com/test-app-down"
         
-    - alert: TestAppRecovered
-      expr: up{job="test-app-service"} == 1
-      for: 30s
+    # Optional: Additional alerts for different scenarios
+    - alert: TestAppHighMemory
+      expr: container_memory_usage_bytes{pod=~"test-app.*"} / container_spec_memory_limit_bytes > 0.8
+      for: 2m
       labels:
-        severity: info
+        severity: warning
         service: test-app
         team: platform
       annotations:
-        summary: "Test application has recovered"
-        description: "Test application {{ $labels.instance }} is back online"
+        summary: "Test application memory usage is high"
+        description: "Test application {{ $labels.pod }} memory usage is above 80%"
+        
+    # INCORRECT EXAMPLE (commented out): Don't create separate recovery alerts
+    # - alert: TestAppRecovered
+    #   expr: up{job="test-app-service"} == 1
+    #   for: 30s
+    #   # This would stay firing forever when app is healthy!
