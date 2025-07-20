@@ -1,4 +1,4 @@
-# prometheus-alert-rules-fixed.yaml - Corrected version for proper self-resolution
+# prometheus-alert-rules.yaml - Corrected version for proper self-resolution
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
